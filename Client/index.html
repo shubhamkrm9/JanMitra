@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report a Civic Issue</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main>
+        <h1>Report a Civic Issue</h1>
+        <form id="report-form">
+            <div class="form-group">
+                <label for="description">Describe the Issue</label>
+                <textarea id="description" name="description" rows="4" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="location">Location or Landmark</label>
+                <input type="text" id="location" name="location" required>
+            </div>
+            <button type="submit">Submit Report</button>
+        </form>
+        <p id="response-message"></p>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>
