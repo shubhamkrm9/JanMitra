@@ -66,3 +66,5 @@ In a new terminal, navigate to the admin directory and run:
 npm start
 
 The React development server will open the admin dashboard, typically on http://localhost:3001.
+
+...
