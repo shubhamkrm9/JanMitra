@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JanMitr - Citizen Dashboard</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    #map { height: 400px; border-radius: 10px; }
+    .highlight { background-color: #fef08a !important; transition: background-color 1s ease; }
+  </style>
+</head>
+
+<body class="bg-gray-100 dark:bg-gray-900 dark:text-white transition-all duration-500">
+
+  <!-- Header -->
+  <header class="flex justify-between items-center px-6 py-4 bg-blue-600 dark:bg-gray-800 shadow-md">
+    <h1 class="text-2xl font-bold text-white">🌐 JanMitr</h1>
+    <nav class="space-x-6 text-white font-medium">
+      <a href="#" onclick="showSection('dashboard')" class="hover:underline">Dashboard</a>
+      <a href="#" onclick="showSection('myReports')" class="hover:underline">My Reports</a>
+      <a href="#" onclick="showSection('reportIssue')" class="hover:underline">Report Issue</a>
+      <a href="#" class="hover:underline">Logout</a>
+    </nav>
+    <button id="modeToggle" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-black dark:text-white rounded-lg shadow">
+      🌙 Dark
+    </button>
+  </header>
+
+  <!-- Main Content -->
+  <main class="p-6">
+
+    <!-- Dashboard -->
+    <section id="dashboard-section">
+      <h2 class="text-xl font-semibold mb-4">📍 Ongoing Issues in Your City</h2>
+      <div id="map" class="mb-6"></div>
+      <div id="issueList" class="space-y-4"></div>
+    </section>
+
+    <!-- My Reports -->
+    <section id="myReports-section" style="display:none;">
+      <h2 class="text-xl font-semibold mb-4">📝 My Reports</h2>
+      <div class="grid gap-4 md:grid-cols-2" id="myReportsList">
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+          <h3 class="font-bold">Broken Streetlight</h3>
+          <p>Status: <span class="text-yellow-500">In Progress</span></p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+          <h3 class="font-bold">Garbage Overflow</h3>
+          <p>Status: <span class="text-red-500">Pending</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Report Issue -->
+    <section id="reportIssue-section" style="display:none;">
+      <h2 class="text-xl font-semibold mb-4">📤 Report a New Issue</h2>
+      <form class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow max-w-lg space-y-4">
+        <input type="text" placeholder="Title" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" required>
+        <textarea placeholder="Describe the issue..." class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" rows="4" required></textarea>
+        <input type="file" accept="image/*,video/*" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700">Submit</button>
+      </form>
+    </section>
+
+  </main>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- App Script -->
+  <script>
+    const issues = [
+      { title: "Pothole in Ward 5", desc: "Large pothole near market", status: "Pending", votes: 12, location: {lat:23.61, lng:85.28} },
+      { title: "Broken Streetlight", desc: "Lamp not working at main road", status: "In Progress", votes: 5, location: {lat:23.615, lng:85.285} },
+      { title: "Garbage Overflow", desc: "Dustbin overflowing in Sector 3", status: "Pending", votes: 8, location: {lat:23.618, lng:85.29} },
+      { title: "Water Leakage", desc: "Pipe burst near school road", status: "Pending", votes: 3, location: {lat:23.612, lng:85.275} },
+      { title: "Traffic Signal Not Working", desc: "Signal down at main junction", status: "In Progress", votes: 10, location: {lat:23.619, lng:85.282} },
+      { title: "Illegal Parking", desc: "Cars blocking footpath at market street", status: "Pending", votes: 2, location: {lat:23.614, lng:85.281} },
+      { title: "Open Manhole", desc: "Dangerous open manhole near bus stop", status: "Pending", votes: 6, location: {lat:23.617, lng:85.278} },
+      { title: "Overflowing Drain", desc: "Drain water flooding near colony", status: "Pending", votes: 4, location: {lat:23.611, lng:85.284} }
+    ];
+
+    // Set up map
+    const map = L.map('map').setView([23.61, 85.28], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    // Status color
+    function getMarkerColor(status) {
+      if (status === "Pending") return "red";
+      if (status === "In Progress") return "orange";
+      if (status === "Resolved") return "green";
+      return "blue";
+    }
+
+    // Render issues
+    function renderIssues() {
+      document.getElementById("issueList").innerHTML = "";
+      issues.forEach((issue, index) => {
+        const marker = L.circleMarker([issue.location.lat, issue.location.lng], {
+          radius: 8,
+          color: getMarkerColor(issue.status),
+          fillColor: getMarkerColor(issue.status),
+          fillOpacity: 0.9
+        }).addTo(map);
+
+        marker.bindPopup(`<b>${issue.title}</b><br>${issue.desc}<br>Status: ${issue.status}<br>Votes: ${issue.votes}`);
+        marker.on("click", () => {
+          const card = document.getElementById(`issue-${index}`);
+          if (card) {
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+            card.classList.add("highlight");
+            setTimeout(() => card.classList.remove("highlight"), 1500);
+          }
+        });
+
+        document.getElementById("issueList").innerHTML += `
+          <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 issue-card" id="issue-${index}">
+            <b class="text-lg">${issue.title}</b><br>
+            ${issue.desc}<br>
+            <span class="font-semibold">Status:</span> 
+            <span class="${issue.status === 'Pending' ? 'text-red-500' : issue.status === 'In Progress' ? 'text-yellow-500' : 'text-green-500'}">
+              ${issue.status}
+            </span><br>
+            <b>Votes: ${issue.votes}</b>
+            <div class="mt-2 space-x-2">
+              <button class="bg-green-500 text-white px-3 py-1 rounded" onclick="vote(${index},1)">👍 Upvote</button>
+              <button class="bg-red-500 text-white px-3 py-1 rounded" onclick="vote(${index},-1)">👎 Downvote</button>
+            </div>
+          </div>`;
+      });
+    }
+
+    function vote(index, change) {
+      issues[index].votes += change;
+      renderIssues();
+    }
+
+    function showSection(section) {
+      document.querySelectorAll("main section").forEach(sec => sec.style.display = "none");
+      document.getElementById(section + "-section").style.display = "block";
+    }
+
+    // Dark Mode Toggle
+    document.getElementById("modeToggle").addEventListener("click", () => {
+      document.body.classList.toggle("dark");
+      const btn = document.getElementById("modeToggle");
+      btn.textContent = document.body.classList.contains("dark") ? "☀️ Light" : "🌙 Dark";
+    });
+
+    renderIssues();
+  </script>
+</body>
+</html>
