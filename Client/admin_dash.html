@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>JanMitr - Government Dashboard</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    #map { height: 420px; border-radius: 10px; }
+    .highlight { background-color: #fef08a !important; transition: background-color 1s ease; }
+    .status-pending { color: #ef4444; }
+    .status-progress { color: #f59e0b; }
+    .status-resolved { color: #10b981; }
+    .priority-high { border-left: 4px solid #ef4444; }
+    .priority-medium { border-left: 4px solid #f59e0b; }
+    .priority-low { border-left: 4px solid #10b981; }
+  </style>
+</head>
+
+<body class="bg-gray-100 dark:bg-gray-900 dark:text-white transition-all duration-500">
+
+  <!-- Header -->
+  <header class="flex justify-between items-center px-6 py-4 bg-blue-600 dark:bg-gray-800 shadow-md">
+    <div class="flex items-center space-x-4">
+      <h1 class="text-2xl font-bold text-white">🏛️ JanMitr Admin</h1>
+      <span class="bg-blue-800 text-white px-3 py-1 rounded-full text-sm">Ward 5 - Ranchi</span>
+    </div>
+    <nav class="space-x-6 text-white font-medium">
+      <a href="#" onclick="showSection('dashboard')" class="hover:underline">Dashboard</a>
+      <a href="#" onclick="showSection('issueManagement')" class="hover:underline">Issue Management</a>
+      <a href="#" onclick="showSection('analytics')" class="hover:underline">Analytics</a>
+      <a href="#" onclick="showSection('departments')" class="hover:underline">Departments</a>
+      <a href="#" class="hover:underline">Logout</a>
+    </nav>
+    <button id="modeToggle" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-black dark:text-white rounded-lg shadow">
+      🌙 Dark
+    </button>
+  </header>
+
+  <!-- Main Content -->
+  <main class="p-6">
+
+    <!-- Dashboard -->
+    <section id="dashboard-section">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <h3 class="text-sm text-gray-500 dark:text-gray-400">Total Issues</h3>
+          <p id="cardTotal" class="text-2xl font-bold text-blue-600">0</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <h3 class="text-sm text-gray-500 dark:text-gray-400">Pending</h3>
+          <p id="cardPending" class="text-2xl font-bold text-red-500">0</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <h3 class="text-sm text-gray-500 dark:text-gray-400">In Progress</h3>
+          <p id="cardProgress" class="text-2xl font-bold text-yellow-500">0</p>
+        </div>
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+          <h3 class="text-sm text-gray-500 dark:text-gray-400">Resolved Today</h3>
+          <p id="cardResolved" class="text-2xl font-bold text-green-500">0</p>
+        </div>
+      </div>
+
+      <h2 class="text-xl font-semibold mb-4">🗺️ Live Issue Map</h2>
+      
+      <!-- Filters -->
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
+        <div class="flex flex-wrap gap-4 items-center">
+          <select id="statusFilter" class="px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+            <option value="">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Resolved">Resolved</option>
+          </select>
+          <select id="categoryFilter" class="px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+            <option value="">All Categories</option>
+            <option value="Infrastructure">Infrastructure</option>
+            <option value="Sanitation">Sanitation</option>
+            <option value="Traffic">Traffic</option>
+            <option value="Utilities">Utilities</option>
+          </select>
+          <select id="priorityFilter" class="px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+            <option value="">All Priority</option>
+            <option value="High">High Priority</option>
+            <option value="Medium">Medium Priority</option>
+            <option value="Low">Low Priority</option>
+          </select>
+          <button onclick="applyFilters()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Apply Filters</button>
+          <button onclick="resetFilters()" class="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600">Reset</button>
+        </div>
+      </div>
+
+      <div id="map" class="mb-6"></div>
+      
+      <h3 class="text-lg font-semibold mb-3">🚨 High Priority Issues</h3>
+      <div id="highPriorityIssues" class="space-y-3 mb-6"></div>
+    </section>
+
+    <!-- Issue Management -->
+    <section id="issueManagement-section" style="display:none;">
+      <h2 class="text-xl font-semibold mb-4">📋 Issue Management</h2>
+      
+      <!-- Search and Filters -->
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow mb-4">
+        <div class="flex flex-wrap gap-4 items-center">
+          <input type="text" id="searchInput" placeholder="Search issues..." class="flex-1 px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+          <select id="departmentFilter" class="px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+            <option value="">All Departments</option>
+            <option value="Public Works">Public Works</option>
+            <option value="Sanitation">Sanitation</option>
+            <option value="Traffic">Traffic</option>
+            <option value="Utilities">Utilities</option>
+          </select>
+          <button onclick="searchIssues()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Search</button>
+          <button onclick="clearSearch()" class="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded hover:bg-gray-300 dark:hover:bg-gray-600">Clear</button>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+              <tr>
+                <th class="px-4 py-3 text-left">Issue ID</th>
+                <th class="px-4 py-3 text-left">Title</th>
+                <th class="px-4 py-3 text-left">Category</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-left">Priority</th>
+                <th class="px-4 py-3 text-left">Votes</th>
+                <th class="px-4 py-3 text-left">Department</th>
+                <th class="px-4 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="issueTableBody" class="divide-y divide-gray-200 dark:divide-gray-700">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Analytics -->
+    <section id="analytics-section" style="display:none;">
+      <h2 class="text-xl font-semibold mb-4">📊 Analytics & Reports</h2>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-4">Issue Resolution Time</h3>
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <span>Average Resolution Time</span>
+              <span class="font-bold">3.2 days</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Fastest Resolution</span>
+              <span class="font-bold text-green-500">4 hours</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Slowest Resolution</span>
+              <span class="font-bold text-red-500">15 days</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+          <h3 class="text-lg font-semibold mb-4">Department Performance</h3>
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <span>Public Works</span>
+              <span class="font-bold text-green-500">92%</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Sanitation</span>
+              <span class="font-bold text-yellow-500">76%</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Traffic</span>
+              <span class="font-bold text-red-500">68%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <h3 class="text-lg font-semibold mb-4">Monthly Trends</h3>
+        <div class="text-center text-gray-500 py-8">
+          📈 Chart visualization would go here<br>
+          (Integration with Chart.js or similar library)
+        </div>
+      </div>
+    </section>
+
+    <!-- Departments -->
+    <section id="departments-section" style="display:none;">
+      <h2 class="text-xl font-semibold mb-4">🏢 Department Management</h2>
+      
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+          <h3 class="font-bold text-lg">Public Works Department</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Infrastructure, Roads, Potholes</p>
+          <div class="mt-2 flex justify-between">
+            <span>Active Issues: <strong>15</strong></span>
+            <span class="text-green-500">✅ Active</span>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+          <h3 class="font-bold text-lg">Sanitation Department</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Garbage, Cleaning, Waste Management</p>
+          <div class="mt-2 flex justify-between">
+            <span>Active Issues: <strong>8</strong></span>
+            <span class="text-green-500">✅ Active</span>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+          <h3 class="font-bold text-lg">Traffic Police</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Traffic Signals, Parking, Road Safety</p>
+          <div class="mt-2 flex justify-between">
+            <span>Active Issues: <strong>12</strong></span>
+            <span class="text-yellow-500">⚠️ Overloaded</span>
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
+          <h3 class="font-bold text-lg">Utilities Department</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Water, Electricity, Street Lights</p>
+          <div class="mt-2 flex justify-between">
+            <span>Active Issues: <strong>6</strong></span>
+            <span class="text-green-500">✅ Active</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Issue Details Modal -->
+  <div id="issueModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-lg w-full mx-4">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold">Issue Details</h3>
+        <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">✕</button>
+      </div>
+      <div id="modalContent"></div>
+      <div class="mt-6 space-x-2">
+        <select id="statusUpdate" class="px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+          <option value="Pending">Pending</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Resolved">Resolved</option>
+        </select>
+        <button onclick="updateIssueStatus()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Update Status</button>
+        <button onclick="assignDepartment()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Assign Department</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- App Script -->
+  <script>
+    // --- Mock Data ---
+    const issues = [
+      { id: 'JM001', title: "Pothole in Ward 5", desc: "Large pothole near market", status: "Pending", votes: 12, location: {lat:23.61, lng:85.28}, category: "Infrastructure", priority: "High", department: "Public Works", reportedBy: "Citizen A", dateReported: "2025-01-15" },
+      { id: 'JM002', title: "Broken Streetlight", desc: "Lamp not working at main road", status: "In Progress", votes: 5, location: {lat:23.615, lng:85.285}, category: "Utilities", priority: "Medium", department: "Utilities", reportedBy: "Citizen B", dateReported: "2025-01-14" },
+      { id: 'JM003', title: "Garbage Overflow", desc: "Dustbin overflowing in Sector 3", status: "Pending", votes: 8, location: {lat:23.618, lng:85.29}, category: "Sanitation", priority: "High", department: "Sanitation", reportedBy: "Citizen C", dateReported: "2025-01-13" },
+      { id: 'JM004', title: "Water Leakage", desc: "Pipe burst near school road", status: "Pending", votes: 3, location: {lat:23.612, lng:85.275}, category: "Utilities", priority: "Low", department: "Utilities", reportedBy: "Citizen D", dateReported: "2025-01-12" },
+      { id: 'JM005', title: "Traffic Signal Not Working", desc: "Signal down at main junction", status: "In Progress", votes: 10, location: {lat:23.619, lng:85.282}, category: "Traffic", priority: "High", department: "Traffic", reportedBy: "Citizen E", dateReported: "2025-01-11" },
+      { id: 'JM006', title: "Illegal Parking", desc: "Cars blocking footpath at market street", status: "Pending", votes: 2, location: {lat:23.614, lng:85.281}, category: "Traffic", priority: "Medium", department: "Traffic", reportedBy: "Citizen F", dateReported: "2025-01-10" },
+      { id: 'JM007', title: "Open Manhole", desc: "Dangerous open manhole near bus stop", status: "Pending", votes: 6, location: {lat:23.617, lng:85.278}, category: "Infrastructure", priority: "High", department: "Public Works", reportedBy: "Citizen G", dateReported: "2025-01-09" },
+      { id: 'JM008', title: "Overflowing Drain", desc: "Drain water flooding near colony", status: "Pending", votes: 4, location: {lat:23.611, lng:85.284}, category: "Infrastructure", priority: "Medium", department: "Public Works", reportedBy: "Citizen H", dateReported: "2025-01-08" }
+    ];
+
+    // --- State ---
+    let map;
+    let currentIssueId = null;
+    let markers = [];
+
+    // Dashboard filter state
+    const dashboardFilters = {
+      status: "",
+      category: "",
+      priority: ""
+    };
+
+    // --- Helpers ---
+    function getMarkerColor(status) {
+      if (status === "Pending") return "red";
+      if (status === "In Progress") return "orange";
+      if (status === "Resolved") return "green";
+      return "blue";
+    }
+
+    function getPriorityClass(priority) {
+      if (priority === "High") return "priority-high";
+      if (priority === "Medium") return "priority-medium";
+      return "priority-low";
+    }
+
+    function getStatusClass(status) {
+      if (status === "Pending") return "status-pending";
+      if (status === "In Progress") return "status-progress";
+      if (status === "Resolved") return "status-resolved";
+      return "";
+    }
+
+    function getFilteredIssues() {
+      return issues.filter(i => {
+        const byStatus = !dashboardFilters.status || i.status === dashboardFilters.status;
+        const byCat = !dashboardFilters.category || i.category === dashboardFilters.category;
+        const byPri = !dashboardFilters.priority || i.priority === dashboardFilters.priority;
+        return byStatus && byCat && byPri;
+      });
+    }
+
+    // --- Map ---
+    function initMap() {
+      map = L.map('map').setView([23.61, 85.28], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+      renderMapMarkers();
+    }
+
+    function renderMapMarkers() {
+      // Clear old markers
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+
+      const data = getFilteredIssues();
+      data.forEach((issue) => {
+        const marker = L.circleMarker([issue.location.lat, issue.location.lng], {
+          radius: 8,
+          color: getMarkerColor(issue.status),
+          fillColor: getMarkerColor(issue.status),
+          fillOpacity: 0.9
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <b>${issue.title}</b><br>
+          ${issue.desc}<br>
+          Status: ${issue.status}<br>
+          Priority: ${issue.priority}<br>
+          Votes: ${issue.votes}<br>
+          Department: ${issue.department}
+        `);
+
+        marker.on("click", () => showIssueDetails(issue.id));
+        markers.push(marker);
+      });
+    }
+
+    // --- Dashboard Cards / Lists ---
+    function renderDashboardCards() {
+      const data = getFilteredIssues();
+      const total = data.length;
+      const pending = data.filter(i => i.status === "Pending").length;
+      const inprog = data.filter(i => i.status === "In Progress").length;
+      const resolvedToday = data.filter(i => i.status === "Resolved").length; // mock
+
+      document.getElementById("cardTotal").textContent = total;
+      document.getElementById("cardPending").textContent = pending;
+      document.getElementById("cardProgress").textContent = inprog;
+      document.getElementById("cardResolved").textContent = resolvedToday;
+    }
+
+    function renderHighPriorityIssues() {
+      const container = document.getElementById("highPriorityIssues");
+      container.innerHTML = "";
+      const data = getFilteredIssues().filter(issue => issue.priority === "High");
+
+      if (!data.length) {
+        container.innerHTML = `<div class="text-gray-500 dark:text-gray-400">No high priority issues match current filters.</div>`;
+        return;
+      }
+
+      data.forEach((issue) => {
+        container.innerHTML += `
+          <div class="bg-white dark:bg-gray-800 shadow rounded-lg p-4 ${getPriorityClass(issue.priority)}">
+            <div class="flex justify-between items-start">
+              <div>
+                <h4 class="font-bold text-lg">${issue.title}</h4>
+                <p class="text-gray-600 dark:text-gray-400">${issue.desc}</p>
+                <div class="mt-2 space-x-4 text-sm">
+                  <span class="${getStatusClass(issue.status)}">${issue.status}</span>
+                  <span>👥 ${issue.votes} votes</span>
+                  <span>🏢 ${issue.department}</span>
+                </div>
+              </div>
+              <button onclick="showIssueDetails('${issue.id}')" class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700">
+                View Details
+              </button>
+            </div>
+          </div>`;
+      });
+    }
+
+    // --- Issue Table ---
+    function renderIssueTable(data = issues) {
+      const tbody = document.getElementById("issueTableBody");
+      tbody.innerHTML = "";
+      data.forEach((issue) => {
+        tbody.innerHTML += `
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+            <td class="px-4 py-3 font-mono text-sm">${issue.id}</td>
+            <td class="px-4 py-3">${issue.title}</td>
+            <td class="px-4 py-3">${issue.category}</td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-1 rounded text-xs font-semibold 
+                ${issue.status === 'Pending' ? 'bg-red-100 text-red-800' : 
+                  issue.status === 'In Progress' ? 'bg-yellow-100 text-yellow-800' : 
+                  'bg-green-100 text-green-800'}">
+                ${issue.status}
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="px-2 py-1 rounded text-xs font-semibold 
+                ${issue.priority === 'High' ? 'bg-red-100 text-red-800' : 
+                  issue.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
+                  'bg-green-100 text-green-800'}">
+                ${issue.priority}
+              </span>
+            </td>
+            <td class="px-4 py-3 font-bold">${issue.votes}</td>
+            <td class="px-4 py-3">${issue.department}</td>
+            <td class="px-4 py-3">
+              <button onclick="showIssueDetails('${issue.id}')" 
+                class="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700">
+                Edit
+              </button>
+            </td>
+          </tr>`;
+      });
+    }
+
+    // --- Modal ---
+    function showIssueDetails(issueId) {
+      const issue = issues.find(i => i.id === issueId);
+      currentIssueId = issueId;
+      document.getElementById("modalContent").innerHTML = `
+        <div class="space-y-3">
+          <div><strong>ID:</strong> ${issue.id}</div>
+          <div><strong>Title:</strong> ${issue.title}</div>
+          <div><strong>Description:</strong> ${issue.desc}</div>
+          <div><strong>Category:</strong> ${issue.category}</div>
+          <div><strong>Current Status:</strong> 
+            <span class="${getStatusClass(issue.status)}">${issue.status}</span>
+          </div>
+          <div><strong>Priority:</strong> ${issue.priority}</div>
+          <div><strong>Votes:</strong> ${issue.votes}</div>
+          <div><strong>Department:</strong> ${issue.department}</div>
+          <div><strong>Reported By:</strong> ${issue.reportedBy}</div>
+          <div><strong>Date Reported:</strong> ${issue.dateReported}</div>
+        </div>`;
+      document.getElementById("statusUpdate").value = issue.status;
+      document.getElementById("issueModal").classList.remove("hidden");
+    }
+
+    function closeModal() {
+      document.getElementById("issueModal").classList.add("hidden");
+      currentIssueId = null;
+    }
+
+    function updateIssueStatus() {
+      if (!currentIssueId) return;
+      const newStatus = document.getElementById("statusUpdate").value;
+      const issue = issues.find(i => i.id === currentIssueId);
+      issue.status = newStatus;
+
+      renderAll();
+      closeModal();
+      alert(`Issue ${currentIssueId} status updated to: ${newStatus}`);
+    }
+
+    function assignDepartment() {
+      if (!currentIssueId) return;
+      const issue = issues.find(i => i.id === currentIssueId);
+      const dept = prompt("Assign department:", issue.department || "");
+      if (dept !== null && dept.trim() !== "") {
+        issue.department = dept.trim();
+        renderAll();
+        closeModal();
+        alert(`Issue ${currentIssueId} assigned to: ${issue.department}`);
+      }
+    }
+
+    // --- Dashboard Filters ---
+    function applyFilters() {
+      dashboardFilters.status = document.getElementById("statusFilter").value;
+      dashboardFilters.category = document.getElementById("categoryFilter").value;
+      dashboardFilters.priority = document.getElementById("priorityFilter").value;
+      renderAll();
+    }
+
+    function resetFilters() {
+      dashboardFilters.status = "";
+      dashboardFilters.category = "";
+      dashboardFilters.priority = "";
+      document.getElementById("statusFilter").value = "";
+      document.getElementById("categoryFilter").value = "";
+      document.getElementById("priorityFilter").value = "";
+      renderAll();
+    }
+
+    // --- Search (Issue Management) ---
+    function searchIssues() {
+      const q = document.getElementById("searchInput").value.trim().toLowerCase();
+      const dept = document.getElementById("departmentFilter").value;
+
+      const filtered = issues.filter(i => {
+        const byDept = !dept || i.department === dept;
+        const byQuery = !q || (i.id.toLowerCase().includes(q) ||
+                               i.title.toLowerCase().includes(q) ||
+                               i.category.toLowerCase().includes(q) ||
+                               i.status.toLowerCase().includes(q));
+        return byDept && byQuery;
+      });
+
+      renderIssueTable(filtered);
+    }
+
+    function clearSearch() {
+      document.getElementById("searchInput").value = "";
+      document.getElementById("departmentFilter").value = "";
+      renderIssueTable(issues);
+    }
+
+    // --- Navigation ---
+    function showSection(section) {
+      document.querySelectorAll("main section").forEach(sec => sec.style.display = "none");
+      document.getElementById(section + "-section").style.display = "block";
+
+      if (section === 'dashboard') {
+        // Initialize or refresh the map
+        if (!map) {
+          setTimeout(() => {
+            initMap();
+            renderAll();
+          }, 100);
+        } else {
+          setTimeout(() => {
+            map.invalidateSize();
+            renderAll();
+          }, 100);
+        }
+      }
+
+      if (section === 'issueManagement') {
+        renderIssueTable(issues);
+      }
+    }
+
+    // --- Dark Mode ---
+    document.getElementById("modeToggle").addEventListener("click", () => {
+      document.body.classList.toggle("dark");
+      const btn = document.getElementById("modeToggle");
+      btn.textContent = document.body.classList.contains("dark") ? "☀️ Light" : "🌙 Dark";
+      // Map tiles look fine without changes; if needed, swap tile layer here.
+      if (map) setTimeout(() => map.invalidateSize(), 100);
+    });
+
+    // --- Render All Dashboard Bits ---
+    function renderAll() {
+      renderDashboardCards();
+      renderHighPriorityIssues();
+      if (map) renderMapMarkers();
+    }
+
+    // --- Init ---
+    document.addEventListener('DOMContentLoaded', function() {
+      // Set initial dark mode button text
+      const btn = document.getElementById("modeToggle");
+      btn.textContent = document.body.classList.contains("dark") ? "☀️ Light" : "🌙 Dark";
+
+      // Default show dashboard
+      showSection('dashboard');
+    });
+  </script>
+</body>
+</html>
