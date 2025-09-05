@@ -58,16 +58,50 @@
       </div>
     </section>
 
-    <!-- Report Issue -->
-    <section id="reportIssue-section" style="display:none;">
-      <h2 class="text-xl font-semibold mb-4">📤 Report a New Issue</h2>
-      <form class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow max-w-lg space-y-4">
-        <input type="text" placeholder="Title" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" required>
-        <textarea placeholder="Describe the issue..." class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" rows="4" required></textarea>
-        <input type="file" accept="image/*,video/*" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
-        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700">Submit</button>
-      </form>
-    </section>
+    <!-- Report Issue (enhanced: JSON payload + geolocation + file->Base64) -->
+<section id="reportIssue-section" style="display:none;">
+  <h2 class="text-xl font-semibold mb-4">📤 Report a New Issue</h2>
+
+  <!-- Note: form kept visually the same; IDs/classes added for JS hooks -->
+  <form id="report-json-form" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow max-w-lg space-y-4">
+    <input id="title" name="title" type="text"
+           placeholder="Title"
+           class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+           required>
+
+    <textarea id="description" name="description"
+              placeholder="Describe the issue..."
+              class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+              rows="4" required></textarea>
+
+    <input id="media" name="media" type="file" accept="image/*,video/*"
+           class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+
+    <!-- Location: user can type OR click Use my location -->
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="location-input" name="location" type="text"
+             placeholder="Address or place (optional)"
+             class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+      <button id="use-location" type="button"
+              class="bg-blue-600 text-white px-3 py-2 rounded-lg shadow hover:bg-blue-700">
+        Use my location
+      </button>
+    </div>
+
+    <!-- Hidden fields to capture coords/address for backend -->
+    <input type="hidden" id="lat" name="lat" />
+    <input type="hidden" id="lng" name="lng" />
+    <input type="hidden" id="address" name="address" />
+
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="text-sm text-gray-500">Image/video will be embedded in JSON as Base64 (demo).</div>
+      <button id="submit-btn" type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700">
+        Submit
+      </button>
+    </div>
+  </form>
+</section>
+
 
   </main>
 
@@ -157,6 +191,182 @@
     });
 
     renderIssues();
+
+(function () {
+  const form = document.getElementById('report-json-form');
+  const mediaInput = document.getElementById('media');
+  const useLocBtn = document.getElementById('use-location');
+  const locationInput = document.getElementById('location-input');
+  const latInput = document.getElementById('lat');
+  const lngInput = document.getElementById('lng');
+  const addressInput = document.getElementById('address');
+  const submitBtn = document.getElementById('submit-btn');
+
+  // Helper: convert File -> dataURL (Base64)
+  function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve(null);
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result); // data:url/... (base64)
+      reader.onerror = (e) => reject(e);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Use browser geolocation, fill lat/lng and attempt to set a basic address
+  useLocBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
+    }
+    useLocBtn.disabled = true;
+    useLocBtn.textContent = 'Locating...';
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      latInput.value = lat;
+      lngInput.value = lng;
+
+      // Try to set a simple human-readable location string.
+      // If Google Maps JS API/Geocoder is loaded on the page, use it (optional).
+      if (window.google && google.maps && google.maps.Geocoder) {
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          useLocBtn.disabled = false;
+          useLocBtn.textContent = 'Use my location';
+          if (status === 'OK' && results && results[0]) {
+            const addr = results[0].formatted_address;
+            locationInput.value = addr;
+            addressInput.value = addr;
+          } else {
+            // fallback to lat,lng string
+            const s = lat.toFixed(6) + ', ' + lng.toFixed(6);
+            locationInput.value = s;
+            addressInput.value = s;
+          }
+        });
+      } else {
+        // No geocoder loaded: just fill coordinates (backend can reverse-geocode if needed)
+        useLocBtn.disabled = false;
+        useLocBtn.textContent = 'Use my location';
+        const s = lat.toFixed(6) + ', ' + lng.toFixed(6);
+        locationInput.value = s;
+        addressInput.value = s;
+      }
+    }, (err) => {
+      useLocBtn.disabled = false;
+      useLocBtn.textContent = 'Use my location';
+      alert('Unable to get your location. Make sure location is enabled in browser.');
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+      function tryInitPlaces() {
+    if (window.google && google.maps && google.maps.places) {
+      const ac = new google.maps.places.Autocomplete(locationInput, { fields: ['geometry', 'formatted_address', 'name'] });
+      ac.setTypes(['geocode', 'establishment']);
+      ac.addListener('place_changed', () => {
+        const place = ac.getPlace();
+        if (place && place.geometry && place.geometry.location) {
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+          latInput.value = lat;
+          lngInput.value = lng;
+          const addr = place.formatted_address || place.name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+          addressInput.value = addr;
+        }
+      });
+    }
+  }
+
+  // Run once in case Google Maps JS is included later and sets window.google
+  tryInitPlaces();
+  // If you add the Google script with callback, call tryInitPlaces() from that callback too.
+
+  form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Preparing...';
+
+  try {
+    const title = document.getElementById('title').value.trim();
+    const description = document.getElementById('description').value.trim();
+    const address = locationInput.value.trim();
+    const lat = latInput.value;
+    const lng = lngInput.value;
+
+    // Build location: prefer lat/lng (object), otherwise fallback to address string
+    let locationValue = null;
+    if (lat && lng) {
+      locationValue = { lat: Number(lat), lng: Number(lng) };
+    } else if (address) {
+      locationValue = address;
+    } else {
+      // If there's no location at all, send a placeholder string so server validation passes.
+      // You can change this to reject client-side instead if you want the user to enter location.
+      locationValue = "Location not provided";
+    }
+
+    const file = mediaInput.files && mediaInput.files[0] ? mediaInput.files[0] : null;
+    const dataUrl = await fileToDataURL(file); // may be null
+
+    const payload = {
+      title,
+      description,
+      location: locationValue,   // <-- important: always present
+      lat: lat || null,
+      lng: lng || null,
+      address: address || null,
+      createdAt: new Date().toISOString(),
+      photo: file ? {
+        filename: file.name,
+        type: file.type,
+        dataUrl
+      } : null
+    };
+
+    // POST JSON to the server endpoint your backend exposes
+    const endpoint = '/api/reports'; // <-- use /api/reports (server expects this)
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (resp.ok) {
+      const json = await resp.json().catch(()=>null);
+      console.log('Server response:', json);
+      alert('Report submitted successfully.');
+      form.reset();
+      latInput.value = '';
+      lngInput.value = '';
+      addressInput.value = '';
+    } else {
+      // server returned error (400/500/404). Show dev info and fallback
+      const text = await resp.text().catch(()=>`status ${resp.status}`);
+      console.warn('Server returned not-ok. Falling back to console output. status:', resp.status, text);
+      console.log('Payload:', payload);
+      alert('Server rejected the submission or endpoint not found. Payload logged to console.');
+    }
+  } catch (err) {
+    console.warn('Submit error; falling back to console output.', err);
+    const fallback = {
+      title: document.getElementById('title').value,
+      description: document.getElementById('description').value,
+      location: locationInput.value,
+      lat: latInput.value,
+      lng: lngInput.value,
+      createdAt: new Date().toISOString()
+    };
+    console.log('Fallback payload (no base64):', fallback);
+    alert('Submission failed (logged to console).');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit';
+  }
+});
+})();
+
+
   </script>
 </body>
 </html>
